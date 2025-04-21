@@ -1,106 +1,79 @@
 use crate::common::{self, Position};
-use crossterm::queue;
+use crossterm::{execute, queue};
 use std::io::{Error, Stdout};
 
-pub struct Cursor {
-    pub position: common::Position,
+pub fn move_to(stdout_handle: &mut Stdout, target: common::Position) -> Result<Position, Error> {
+    let (columns, rows) = crossterm::terminal::size()?;
+
+    let clamped_x = target.x.clamp(0, columns - 1);
+    let clamped_y = target.y.clamp(0, rows - 1);
+
+    let move_command = crossterm::cursor::MoveTo(clamped_x, clamped_y);
+    let updated_position = Position {
+        x: clamped_x,
+        y: clamped_y,
+    };
+
+    execute!(stdout_handle, move_command)?;
+
+    Ok(updated_position)
 }
 
-impl Default for Cursor {
-    fn default() -> Self {
-        Cursor {
-            position: common::Position { x: 2, y: 0 },
-        }
+pub fn move_right_with_wrap(stdout_handle: &mut Stdout) -> Result<Position, Error> {
+    let (columns, _) = crossterm::terminal::size()?;
+    let (mut x, mut y) = crossterm::cursor::position()?;
+
+    x += 1;
+
+    let should_wrap = x + 1 > columns;
+    if should_wrap {
+        x = 2;
+        y += 1
     }
+
+    let new_position = Position { x, y };
+
+    move_to(stdout_handle, new_position)
 }
 
-impl Cursor {
-    pub fn move_to(
-        &mut self,
-        stdout_handle: &mut Stdout,
-        target: common::Position,
-    ) -> Result<(), Error> {
-        // handle clamps
-        let (columns, rows) = crossterm::terminal::size()?;
+pub fn move_left_with_wrap(stdout_handle: &mut Stdout) -> Result<Position, Error> {
+    let (columns, _) = crossterm::terminal::size()?;
 
-        let clamped_x = target.x.clamp(0, columns - 1);
-        let clamped_y = target.y.clamp(0, rows - 1);
+    let (mut x, mut y) = crossterm::cursor::position()?;
 
-        let move_command = crossterm::cursor::MoveTo(clamped_x, clamped_y);
-        queue!(stdout_handle, move_command)?;
+    x -= 1;
 
-        self.position = Position {
-            x: clamped_x,
-            y: clamped_y,
-        };
-
-        Ok(())
+    let should_wrap = x - 1 == 0;
+    if should_wrap {
+        x = if y == 0 { 2 } else { columns };
+        y = if y > 0 { y - 1 } else { 0 };
     }
 
-    pub fn move_right_with_wrap(&mut self, stdout_handle: &mut Stdout) -> Result<(), Error> {
-        let (columns, _) = crossterm::terminal::size()?;
+    let new_position = Position { x, y };
 
-        let mut new_x = self.position.x + 1;
-        let mut new_y = self.position.y;
+    move_to(stdout_handle, new_position)
+}
 
-        let should_wrap = new_x + 1 > columns;
+pub fn move_down(stdout_handle: &mut Stdout) -> Result<Position, Error> {
+    let (x, y) = crossterm::cursor::position()?;
+    let new_position = Position { x, y: y + 1 };
 
-        if should_wrap {
-            new_x = 2;
-            new_y += 1;
-        }
+    move_to(stdout_handle, new_position)
+}
 
-        let target = common::Position { x: new_x, y: new_y };
+pub fn move_up(stdout_handle: &mut Stdout) -> Result<Position, Error> {
+    let (x, mut y) = crossterm::cursor::position()?;
+    y = if y == 0 { 0 } else { y - 1 };
 
-        self.move_to(stdout_handle, target)
-    }
+    let new_position = Position { x, y };
 
-    pub fn move_left_with_wrap(&mut self, stdout_handle: &mut Stdout) -> Result<(), Error> {
-        let (columns, _) = crossterm::terminal::size()?;
+    move_to(stdout_handle, new_position)
+}
 
-        let mut new_x = self.position.x - 1;
-        let mut new_y = self.position.y;
+pub fn hide(stdout_handle: &mut Stdout) -> Result<(), Error> {
+    queue!(stdout_handle, crossterm::cursor::Hide)
+}
 
-        let should_wrap = new_x - 1 == 0;
-
-        if should_wrap {
-            new_x = columns;
-            // new_y -= 1;
-            new_y = if new_y == 0 { 0 } else { new_y - 1 };
-        }
-
-        let target = common::Position { x: new_x, y: new_y };
-
-        self.move_to(stdout_handle, target)
-    }
-
-    pub fn move_down(&mut self, stdout_handle: &mut Stdout) -> Result<(), Error> {
-        let new_x = self.position.x;
-        let new_y = self.position.y + 1;
-
-        let target = common::Position { x: new_x, y: new_y };
-
-        self.move_to(stdout_handle, target)
-    }
-
-    pub fn move_up(&mut self, stdout_handle: &mut Stdout) -> Result<(), Error> {
-        let new_x = self.position.x;
-        let new_y = if self.position.y == 0 {
-            0
-        } else {
-            self.position.y - 1
-        };
-
-        let target = common::Position { x: new_x, y: new_y };
-
-        self.move_to(stdout_handle, target)
-    }
-
-    pub fn hide(&mut self, stdout_handle: &mut Stdout) -> Result<(), Error> {
-        queue!(stdout_handle, crossterm::cursor::Hide)
-    }
-
-    pub fn show(&mut self, stdout_handle: &mut Stdout) -> Result<(), Error> {
-        queue!(stdout_handle, crossterm::cursor::Show)
-    }
+pub fn show(stdout_handle: &mut Stdout) -> Result<(), Error> {
+    queue!(stdout_handle, crossterm::cursor::Show)
 }

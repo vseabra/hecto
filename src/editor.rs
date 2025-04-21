@@ -1,24 +1,33 @@
-use crate::common::{self, Position};
-use crate::cursor::Cursor;
+use crate::buffer::Buffer;
+use crate::common::Position;
+use crate::cursor;
+use crate::view::View;
 use crossterm::event::{read, Event, KeyEvent, KeyModifiers};
-use crossterm::event::{Event::Key, KeyCode::Char};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
-use crossterm::{execute, queue};
-use std::fmt::Display;
-use std::io::{stdout, Error, Write};
+use crossterm::event::{
+    Event::{Key, Resize},
+    KeyCode::Char,
+};
+use crossterm::execute;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen};
+use std::io::{stdout, Error};
 
 pub struct Editor {
     should_quit: bool,
-    cursor: Cursor,
     stdout_handle: std::io::Stdout,
+    cursor_position: Position,
+    should_redraw: bool,
+    view: View,
 }
 
 impl Editor {
-    pub fn default() -> Self {
+    pub fn new(initial_state: String) -> Self {
+        let initial_buffer = Buffer::from_string(initial_state);
         Editor {
             should_quit: false,
-            cursor: Cursor::default(),
+            should_redraw: true,
             stdout_handle: stdout(),
+            cursor_position: Position { x: 2, y: 0 },
+            view: View::new(initial_buffer),
         }
     }
 
@@ -36,6 +45,7 @@ impl Editor {
     }
 
     fn initialize() -> Result<(), Error> {
+        execute!(stdout(), EnterAlternateScreen)?;
         enable_raw_mode()?;
 
         Self::clear_screen()
@@ -48,19 +58,24 @@ impl Editor {
     }
 
     fn terminate() -> Result<(), Error> {
-        disable_raw_mode()
+        disable_raw_mode()?;
+        execute!(stdout(), LeaveAlternateScreen)
     }
 
     fn repl(&mut self) -> Result<(), Error> {
-        self.draw_rows()?;
-        self.stdout_handle.flush()?;
+        self.view.render()?;
+        cursor::move_to(&mut self.stdout_handle, self.cursor_position)?;
 
         loop {
-            self.draw_rows()?;
+            if self.should_redraw {
+                self.view.render()?;
+                self.should_redraw = false;
+            };
+            // after drawing the view, we need to move the cursor to the current position
+            cursor::move_to(&mut self.stdout_handle, self.cursor_position)?;
 
             let event = read()?;
             self.handle_event(&event)?;
-            self.stdout_handle.flush()?;
 
             if self.should_quit {
                 break;
@@ -80,46 +95,29 @@ impl Editor {
                     self.should_quit = true;
                 }
 
-                Char(char) => self.print(self.cursor.position, char)?,
-
-                crossterm::event::KeyCode::Up => self.cursor.move_up(&mut self.stdout_handle)?,
-                crossterm::event::KeyCode::Left => self.cursor.move_left_with_wrap(&mut self.stdout_handle)?,
-                crossterm::event::KeyCode::Down => self.cursor.move_down(&mut self.stdout_handle)?,
-                crossterm::event::KeyCode::Right => self.cursor.move_right_with_wrap(&mut self.stdout_handle)?,
+                // Char(char) => self.print(self.cursor.position, char)?,
+                crossterm::event::KeyCode::Up => {
+                    self.cursor_position = cursor::move_up(&mut self.stdout_handle)?;
+                }
+                crossterm::event::KeyCode::Left => {
+                    self.cursor_position = cursor::move_left_with_wrap(&mut self.stdout_handle)?;
+                }
+                crossterm::event::KeyCode::Down => {
+                    self.cursor_position = cursor::move_down(&mut self.stdout_handle)?;
+                }
+                crossterm::event::KeyCode::Right => {
+                    self.cursor_position = cursor::move_right_with_wrap(&mut self.stdout_handle)?;
+                }
 
                 _ => {}
             }
+
+            // self.should_redraw = true;
+        }
+        if let Resize(_, _) = event {
+            self.should_redraw = true;
         }
 
         Ok(())
-    }
-
-    fn print<T: Display>(
-        &mut self,
-        position: Position,
-        content: T,
-    ) -> Result<(), Error> {
-        self.cursor.move_to(&mut self.stdout_handle, position)?;
-
-        let print_command = crossterm::style::Print(content);
-
-        queue!(&mut self.stdout_handle, print_command)?;
-
-        self.cursor.move_right_with_wrap(&mut self.stdout_handle)
-
-    }
-
-    fn draw_rows(&mut self) -> Result<(), Error> {
-        let (_, lines) = crossterm::terminal::size()?;
-        self.cursor.hide(&mut self.stdout_handle)?;
-        let cursor_before = self.cursor.position;
-
-        for line in 0..lines {
-            self.cursor.move_to(&mut self.stdout_handle, Position{x: 0, y: line})?;
-            self.print(Position{x: 0, y: line}, "~")?;
-        }
-
-        self.cursor.move_to(&mut self.stdout_handle, cursor_before)?;
-        self.cursor.show(&mut self.stdout_handle)
     }
 }
