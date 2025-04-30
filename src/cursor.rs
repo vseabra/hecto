@@ -1,4 +1,4 @@
-use crate::common::{self, Position};
+use crate::common::{self, Direction, Position};
 use crossterm::{execute, queue};
 use std::io::{Error, Stdout};
 
@@ -19,55 +19,75 @@ pub fn move_to(stdout_handle: &mut Stdout, target: common::Position) -> Result<P
     Ok(updated_position)
 }
 
-pub fn move_right_with_wrap(stdout_handle: &mut Stdout) -> Result<Position, Error> {
+pub fn move_right(stdout_handle: &mut Stdout) -> Result<(Position, Direction), Error> {
     let (columns, _) = crossterm::terminal::size()?;
-    let (mut x, mut y) = crossterm::cursor::position()?;
+    let (mut x, y) = crossterm::cursor::position()?;
+    let mut scroll_direction = Direction::None;
 
     x += 1;
 
-    let should_wrap = x + 1 > columns;
-    if should_wrap {
-        x = 2;
-        y += 1
+    let is_scroll = x + 1 > columns;
+    if is_scroll {
+        x = columns;
+        scroll_direction = Direction::Right;
     }
 
     let new_position = Position { x, y };
 
-    move_to(stdout_handle, new_position)
+    Ok((move_to(stdout_handle, new_position)?, scroll_direction))
 }
 
-pub fn move_left_with_wrap(stdout_handle: &mut Stdout) -> Result<Position, Error> {
-    let (columns, _) = crossterm::terminal::size()?;
-
-    let (mut x, mut y) = crossterm::cursor::position()?;
+pub fn move_left(stdout_handle: &mut Stdout) -> Result<(Position, Direction), Error> {
+    let (mut x, y) = crossterm::cursor::position()?;
+    let mut scroll_direction = Direction::None;
 
     x -= 1;
 
-    let should_wrap = x - 1 == 0;
-    if should_wrap {
-        x = if y == 0 { 2 } else { columns };
-        y = if y > 0 { y - 1 } else { 0 };
+    let is_scroll = x - 1 == 0;
+    if is_scroll {
+        x = 2;
+        scroll_direction = Direction::Left;
     }
 
     let new_position = Position { x, y };
 
-    move_to(stdout_handle, new_position)
+    Ok((move_to(stdout_handle, new_position)?, scroll_direction))
 }
 
-pub fn move_down(stdout_handle: &mut Stdout) -> Result<Position, Error> {
-    let (x, y) = crossterm::cursor::position()?;
-    let new_position = Position { x, y: y + 1 };
-
-    move_to(stdout_handle, new_position)
-}
-
-pub fn move_up(stdout_handle: &mut Stdout) -> Result<Position, Error> {
+pub fn move_down(stdout_handle: &mut Stdout) -> Result<(Position, Direction), Error> {
+    let (_, rows) = crossterm::terminal::size()?;
     let (x, mut y) = crossterm::cursor::position()?;
-    y = if y == 0 { 0 } else { y - 1 };
+    let mut scroll_direction = Direction::None;
+
+    y += 1;
+
+    let is_scroll = y + 1 >= rows;
+    if is_scroll {
+        y = rows;
+        scroll_direction = Direction::Down;
+    }
 
     let new_position = Position { x, y };
 
-    move_to(stdout_handle, new_position)
+    Ok((move_to(stdout_handle, new_position)?, scroll_direction))
+}
+
+pub fn move_up(stdout_handle: &mut Stdout) -> Result<(Position, Direction), Error> {
+    let (x, mut y) = crossterm::cursor::position()?;
+    let mut scroll_direction = Direction::None;
+
+    if y > 0 {
+        y -= 1;
+    }
+
+    let is_scroll = y == 0;
+    if is_scroll {
+        scroll_direction = Direction::Up;
+    }
+
+    let new_position = Position { x, y };
+
+    Ok((move_to(stdout_handle, new_position)?, scroll_direction))
 }
 
 pub fn hide(stdout_handle: &mut Stdout) -> Result<(), Error> {

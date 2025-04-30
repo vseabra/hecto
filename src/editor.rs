@@ -1,5 +1,5 @@
 use crate::buffer::Buffer;
-use crate::common::Position;
+use crate::common::{Direction, Position};
 use crate::cursor;
 use crate::view::View;
 use crossterm::event::{read, Event, KeyEvent, KeyModifiers};
@@ -86,6 +86,8 @@ impl Editor {
     }
 
     fn handle_event(&mut self, event: &Event) -> Result<(), Error> {
+        let mut scroll_direction = Direction::None;
+
         if let Key(KeyEvent {
             code, modifiers, ..
         }) = event
@@ -97,16 +99,16 @@ impl Editor {
 
                 // Char(char) => self.print(self.cursor.position, char)?,
                 crossterm::event::KeyCode::Up => {
-                    self.cursor_position = cursor::move_up(&mut self.stdout_handle)?;
+                    (self.cursor_position, scroll_direction) = cursor::move_up(&mut self.stdout_handle)?;
                 }
                 crossterm::event::KeyCode::Left => {
-                    self.cursor_position = cursor::move_left_with_wrap(&mut self.stdout_handle)?;
+                    (self.cursor_position, scroll_direction) = cursor::move_left(&mut self.stdout_handle)?;
                 }
                 crossterm::event::KeyCode::Down => {
-                    self.cursor_position = cursor::move_down(&mut self.stdout_handle)?;
+                    (self.cursor_position, scroll_direction) = cursor::move_down(&mut self.stdout_handle)?;
                 }
                 crossterm::event::KeyCode::Right => {
-                    self.cursor_position = cursor::move_right_with_wrap(&mut self.stdout_handle)?;
+                    (self.cursor_position, scroll_direction) = cursor::move_right(&mut self.stdout_handle)?;
                 }
 
                 _ => {}
@@ -114,6 +116,12 @@ impl Editor {
 
             // self.should_redraw = true;
         }
+
+        if scroll_direction != Direction::None {
+            self.should_redraw = true;
+            self.view.scroll(scroll_direction);
+        }
+
         if let Resize(_, _) = event {
             self.should_redraw = true;
         }

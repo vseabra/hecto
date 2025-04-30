@@ -11,10 +11,26 @@ impl Position {
             y: position.1,
         }
     }
+
+    pub fn line_start_with_gutter(line: u16) -> Self {
+        Position {
+            x: 2,
+            y: line,
+        }
+    }
 }
 
 impl Default for Position {
     fn default() -> Self {
         Position { x: 2, y: 0 }
     }
+}
+
+#[derive(PartialEq)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+    None,
 }
