@@ -138,4 +138,8 @@ impl View {
             Direction::None => {}
         }
     }
+
+    //     pub fn get_bounds(&self) -> Result<(u16, u16), Error> {
+    //         crossterm::terminal::size()
+    //     }
 }

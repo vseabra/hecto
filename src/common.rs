@@ -1,4 +1,6 @@
-#[derive(Clone, Copy, Debug)]
+use crossterm::event::KeyCode;
+
+#[derive(Copy, Clone)]
 pub struct Position {
     pub x: u16,
     pub y: u16,
@@ -13,10 +15,7 @@ impl Position {
     }
 
     pub fn line_start_with_gutter(line: u16) -> Self {
-        Position {
-            x: 2,
-            y: line,
-        }
+        Position { x: 2, y: line }
     }
 }
 
@@ -33,4 +32,22 @@ pub enum Direction {
     Left,
     Right,
     None,
+}
+
+impl From<&KeyCode> for Direction {
+    fn from(key_code: &KeyCode) -> Self {
+        match key_code {
+            KeyCode::Up => Direction::Up,
+            KeyCode::Left => Direction::Left,
+            KeyCode::Right => Direction::Right,
+            KeyCode::Down => Direction::Down,
+            _ => Direction::None,
+        }
+    }
+}
+
+pub enum EditorCommand {
+    Move(Direction),
+    Resize((u16, u16)),
+    Quit,
 }

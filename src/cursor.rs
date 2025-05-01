@@ -76,9 +76,7 @@ pub fn move_up(stdout_handle: &mut Stdout) -> Result<(Position, Direction), Erro
     let (x, mut y) = crossterm::cursor::position()?;
     let mut scroll_direction = Direction::None;
 
-    if y > 0 {
-        y -= 1;
-    }
+    y = y.saturating_sub(1);
 
     let is_scroll = y == 0;
     if is_scroll {
