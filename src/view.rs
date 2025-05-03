@@ -12,27 +12,39 @@ pub struct View {
     stdout_handle: std::io::Stdout,
     buffer: Buffer,
     scroll_offset: Position,
+    cursor_position: Position,
+    needs_redraw: bool,
 }
 
 impl View {
     pub fn new(buffer: Buffer) -> Self {
+        cursor::move_to(&mut stdout(), Position::line_start_with_gutter(0))
+            .expect("failed to move cursor on window init");
+
         View {
             stdout_handle: stdout(),
             buffer,
-            scroll_offset: Position { x: 0, y: 0 },
+            scroll_offset: Position::default(),
+            cursor_position: Position::default(),
+            needs_redraw: true,
         }
     }
 
     pub fn render(&mut self) -> Result<(), Error> {
+        if !self.needs_redraw {
+            return Ok(());
+        }
+
+        self.needs_redraw = false;
+
         cursor::hide(&mut self.stdout_handle)?;
-
         self.draw_rows()?;
-
         cursor::show(&mut self.stdout_handle)?;
+
         self.stdout_handle.flush()
     }
 
-    pub fn draw_rows(&mut self) -> Result<(), Error> {
+    fn draw_rows(&mut self) -> Result<(), Error> {
         let (_, rows) = crossterm::terminal::size()?;
 
         let cursor_before_tuple = crossterm::cursor::position()?;
@@ -117,7 +129,7 @@ impl View {
         Ok(())
     }
 
-    pub fn scroll(&mut self, direction: Direction) {
+    fn scroll(&mut self, direction: Direction) {
         match direction {
             Direction::Up => {
                 if self.scroll_offset.y > 0 {
@@ -137,6 +149,31 @@ impl View {
             }
             Direction::None => {}
         }
+    }
+
+    pub fn move_cursor(&mut self, direction: Direction) -> Result<(), Error> {
+        let (new_position, scroll_direction) = match direction {
+            Direction::Up => cursor::move_up(&mut self.stdout_handle)?,
+            Direction::Down => cursor::move_down(&mut self.stdout_handle)?,
+            Direction::Left => cursor::move_left(&mut self.stdout_handle)?,
+            Direction::Right => cursor::move_right(&mut self.stdout_handle)?,
+            Direction::None => (self.cursor_position, Direction::None),
+        };
+
+        self.cursor_position = new_position;
+
+        if scroll_direction != Direction::None {
+            self.scroll(scroll_direction);
+            self.needs_redraw = true;
+        }
+
+        Ok(())
+    }
+
+    pub fn resize(&mut self, new_dimensions: (u16, u16)) -> Result<(), Error> {
+        // TODO: snap cursor to fit within new dimensions
+        self.needs_redraw = true;
+        Ok(())
     }
 
     //     pub fn get_bounds(&self) -> Result<(u16, u16), Error> {

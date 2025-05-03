@@ -21,7 +21,7 @@ impl Position {
 
 impl Default for Position {
     fn default() -> Self {
-        Position { x: 2, y: 0 }
+        Position { x: 0, y: 0 }
     }
 }
 
