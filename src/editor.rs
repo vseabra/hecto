@@ -1,5 +1,6 @@
 use crate::buffer::Buffer;
-use crate::common::EditorCommand;
+use crate::common::Direction;
+use crate::vectors::Vec2;
 use crate::view::View;
 use crossterm::event::{read, KeyCode, KeyEvent, KeyModifiers};
 use crossterm::event::{
@@ -12,6 +13,12 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use std::io::{stdout, Error, Write};
+
+pub enum EditorCommand {
+    Move(Direction),
+    Resize((u16, u16)),
+    Quit,
+}
 
 pub struct Editor {
     should_quit: bool,
@@ -33,7 +40,7 @@ impl Editor {
         match self.repl() {
             Ok(_) => {}
             Err(err) => {
-                println!("Error: {err:#?}");
+                panic!("Error: {err:#?}");
             }
         }
 
@@ -94,7 +101,9 @@ impl Editor {
         match command {
             EditorCommand::Move(direction) => self.view.move_cursor(direction)?,
             EditorCommand::Quit => self.should_quit = true,
-            EditorCommand::Resize(new_dimensions) => self.view.resize(new_dimensions)?
+            EditorCommand::Resize(new_dimensions) => {
+                self.view.resize(Vec2::from_u16_tuple(new_dimensions))?
+            }
         }
         Ok(())
     }
