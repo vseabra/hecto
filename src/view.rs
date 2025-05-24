@@ -5,9 +5,9 @@ use crate::buffer::Buffer;
 use crate::common::Direction;
 use crate::cursor;
 use crate::vectors::Vec2;
+use std::io::stdout;
 use std::io::Error;
 use std::io::Write;
-use std::io::stdout;
 
 pub struct View {
     stdout_handle: std::io::Stdout,
@@ -62,7 +62,8 @@ impl View {
                 self.get_bounds()?.y,
                 self.scroll_offset.x,
                 self.scroll_offset.y,
-                self.character_at(self.cursor_position.projected_by(self.scroll_offset)).unwrap_or_default()
+                self.character_at(self.cursor_position.projected_by(self.scroll_offset))
+                    .unwrap_or_default()
             );
         }
 
@@ -124,13 +125,24 @@ impl View {
         let wish_absolute_pos = self.next_valid_position_in_direction(absolute_pos, direction)?;
         let wish_terminal_pos = wish_absolute_pos.unprojected_from(self.scroll_offset);
 
-        // TODO: apply multiple shifts (both down and up, based on direction)
         while !self.is_position_visible(wish_absolute_pos)? {
-            let direction = if wish_terminal_pos.x > self.get_viewport()?.x {
+            let is_after_viewport = wish_absolute_pos.x > self.get_viewport()?.x;
+            let is_before_viewport = wish_absolute_pos.x < self.scroll_offset.x;
+            let is_above_viewport = wish_absolute_pos.y < self.get_viewport()?.y;
+            let is_below_viewport = wish_absolute_pos.y > self.get_viewport()?.y;
+
+            let direction = if is_after_viewport {
                 Direction::Right
-            } else {
+            } else if is_before_viewport {
                 Direction::Left
+            } else if is_above_viewport {
+                Direction::Up
+            } else if is_below_viewport {
+                Direction::Down
+            } else {
+                Direction::None
             };
+
             self.scroll_offset = self.scroll_offset.shifted(direction);
             self.needs_redraw = true;
         }
@@ -190,7 +202,7 @@ impl View {
                 y: line,
             }
             .shifted(Direction::Left)),
-            None => Ok(Vec2 { x: 0, y: line })
+            None => Ok(Vec2 { x: 0, y: line }),
         }
     }
 
